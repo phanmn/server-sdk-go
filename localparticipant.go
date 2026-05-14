@@ -134,6 +134,7 @@ func (p *LocalParticipant) prepareTrackPublication(track webrtc.TrackLocal, opts
 		Height:                uint32(opts.VideoHeight),
 		DisableDtx:            opts.DisableDTX,
 		Stereo:                opts.Stereo,
+		DisableRed: 		   opts.DisableRed,
 		Stream:                opts.Stream,
 		Encryption:            opts.Encryption,
 		BackupCodecPolicy:     opts.BackupCodecPolicy,
