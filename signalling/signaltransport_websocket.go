@@ -273,6 +273,13 @@ func (s *signalTransportWebSocket) readWorker(readerClosedCh chan struct{}) {
 			}
 			return
 		}
+		// PATCH: readResponse returns (nil, nil) for frames it could not decode
+		// (e.g. a non-SignalResponse custom message multiplexed onto the signal
+		// socket). Skip them instead of dispatching nil so the connection stays
+		// alive and no spurious reconnect is triggered.
+		if res == nil {
+			continue
+		}
 		s.params.SignalHandler.HandleMessage(res)
 	}
 }
@@ -293,13 +300,22 @@ func (s *signalTransportWebSocket) readResponse() (proto.Message, error) {
 	switch messageType {
 	case websocket.BinaryMessage:
 		// protobuf encoded
-		err := proto.Unmarshal(payload, msg)
-		return msg, err
+		if err := proto.Unmarshal(payload, msg); err != nil {
+			// PATCH: tolerate frames that aren't a decodable SignalResponse
+			// (custom messages on the signal socket). Skip instead of treating
+			// it as a fatal transport error, which would tear down the session.
+			s.params.Logger.Debugw("ignoring undecodable signal message", "error", err)
+			return nil, nil
+		}
+		return msg, nil
 
 	case websocket.TextMessage:
 		// json encoded
-		err := protojson.Unmarshal(payload, msg)
-		return msg, err
+		if err := protojson.Unmarshal(payload, msg); err != nil {
+			s.params.Logger.Debugw("ignoring undecodable signal message", "error", err)
+			return nil, nil
+		}
+		return msg, nil
 
 	default:
 		return nil, nil
